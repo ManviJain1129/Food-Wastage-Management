@@ -1,0 +1,8 @@
+streamlit
+pandas
+altair
+plotly
+sqlalchemy
+altair
+matplotlib
+python-dateutil
