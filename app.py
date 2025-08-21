@@ -1,7 +1,11 @@
 import streamlit as st
 import pandas as pd
+import sqlite3  # If you use SQLite. Otherwise, use your DB driver
 import plotly.express as px
 from datetime import datetime
+def get_connection():
+    conn = sqlite3.connect("your_database.db")
+    return conn
 
 st.set_page_config(page_title="Food Wastage Management", layout="wide")
 
@@ -136,3 +140,78 @@ st.dataframe(filtered_providers)
 
 st.subheader("Receivers")
 st.dataframe(receivers)
+st.header("Manage Food Listings")
+
+# READ: show existing food listings
+def show_food_listings():
+    conn = get_connection()
+    df = pd.read_sql("SELECT * FROM food_listings", conn)
+    conn.close()
+    st.dataframe(df)
+
+show_food_listings()
+
+# CREATE: add new food listing
+with st.expander("Add New Food Listing"):
+    with st.form("add_food_form"):
+        food_name = st.text_input("Food Name")
+        quantity = st.number_input("Quantity", min_value=1)
+        expiry_date = st.date_input("Expiry Date")
+        provider_id = st.number_input("Provider ID", min_value=1)
+        food_type = st.selectbox("Food Type", ["Vegetarian", "Non-Vegetarian", "Vegan"])
+        meal_type = st.selectbox("Meal Type", ["Breakfast", "Lunch", "Dinner", "Snacks"])
+        submit_add = st.form_submit_button("Add Food")
+
+        if submit_add:
+            conn = get_connection()
+            query = """INSERT INTO food_listings (Food_Name, Quantity, Expiry_Date, Provider_ID, Food_Type, Meal_Type)
+                       VALUES (?, ?, ?, ?, ?, ?)"""
+            conn.execute(query, (food_name, quantity, expiry_date, provider_id, food_type, meal_type))
+            conn.commit()
+            conn.close()
+            st.success("Food listing added successfully!")
+            st.experimental_rerun()  # refresh page to show updated data
+
+# UPDATE: update existing listing
+with st.expander("Update Food Listing"):
+    conn = get_connection()
+    df = pd.read_sql("SELECT * FROM food_listings", conn)
+    conn.close()
+
+    food_ids = df['Food_ID'].tolist()
+    food_to_update = st.selectbox("Select Food ID to update", food_ids)
+
+    if food_to_update:
+        selected_food = df[df['Food_ID'] == food_to_update].iloc[0]
+
+        with st.form("update_food_form"):
+            new_food_name = st.text_input("Food Name", value=selected_food['Food_Name'])
+            new_quantity = st.number_input("Quantity", min_value=1, value=int(selected_food['Quantity']))
+            new_expiry_date = st.date_input("Expiry Date", pd.to_datetime(selected_food['Expiry_Date']))
+            submit_update = st.form_submit_button("Update Food")
+
+            if submit_update:
+                conn = get_connection()
+                update_query = """UPDATE food_listings SET Food_Name=?, Quantity=?, Expiry_Date=? WHERE Food_ID=?"""
+                conn.execute(update_query, (new_food_name, new_quantity, new_expiry_date, food_to_update))
+                conn.commit()
+                conn.close()
+                st.success("Food listing updated successfully!")
+                st.experimental_rerun()
+
+# DELETE: delete a food listing
+with st.expander("Delete Food Listing"):
+    conn = get_connection()
+    df = pd.read_sql("SELECT Food_ID, Food_Name FROM food_listings", conn)
+    conn.close()
+
+    food_ids = df['Food_ID'].tolist()
+    food_to_delete = st.selectbox("Select Food ID to delete", food_ids)
+
+    if st.button("Delete Food Listing"):
+        conn = get_connection()
+        conn.execute("DELETE FROM food_listings WHERE Food_ID=?", (food_to_delete,))
+        conn.commit()
+        conn.close()
+        st.success("Food listing deleted successfully!")
+        st.experimental_rerun()
